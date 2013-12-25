@@ -1,6 +1,4 @@
-#include "pebble_os.h"
-#include "pebble_app.h"
-#include "pebble_fonts.h"
+#include <pebble.h>
 
 #include "http.h"
 #include "util.h"
@@ -181,7 +179,7 @@ void reconnect(void* context) {
 
 void request_weather();
 
-void handle_tick(AppContextRef ctx, PebbleTickEvent *t)
+void handle_tick(struct tm* tick_time, TimeUnits units_changed)
 {
     // 'Animate' loading icon until the first successful weather request
 	if (!has_temperature && !has_failed)
@@ -200,21 +198,19 @@ void handle_tick(AppContextRef ctx, PebbleTickEvent *t)
 	}
 	
 	// Subsequently update time and date once every minute
-	if (t->units_changed & MINUTE_UNIT) 
+	if (units_changed & MINUTE_UNIT) 
 	{
 		// Need to be static because pointers to them are stored in the text layers
 	    static char date_text[] = "XXX 00";
 	    static char hour_text[] = "00";
 	    static char minute_text[] = ":00";
-
-	    (void)ctx;  // Prevent "unused parameter" warning
 		
-		if (t->units_changed & DAY_UNIT)
+		if (units_changed & DAY_UNIT)
 	    {		
 		    string_format_time(date_text,
 	                           sizeof(date_text),
 	                           "%a %d",
-	                           t->tick_time);
+	                           tick_time);
 
 			// Triggered if day of month < 10
 			if (date_text[4] == '0')
@@ -274,7 +270,7 @@ void handle_tick(AppContextRef ctx, PebbleTickEvent *t)
 
 	    if (clock_is_24h_style())
 	    {
-	        string_format_time(hour_text, sizeof(hour_text), "%H", t->tick_time);
+	        string_format_time(hour_text, sizeof(hour_text), "%H", tick_time);
 			if (hour_text[0] == '0')
 	        {
 	            // Hack to get rid of the leading zero of the hour
@@ -283,7 +279,7 @@ void handle_tick(AppContextRef ctx, PebbleTickEvent *t)
 	    }
 	    else
 	    {
-	        string_format_time(hour_text, sizeof(hour_text), "%I", t->tick_time);
+	        string_format_time(hour_text, sizeof(hour_text), "%I", tick_time);
 	        if (hour_text[0] == '0')
 	        {
 	            // Hack to get rid of the leading zero of the hour
@@ -291,7 +287,7 @@ void handle_tick(AppContextRef ctx, PebbleTickEvent *t)
 	        }
 	    }
 
-	    string_format_time(minute_text, sizeof(minute_text), ":%M", t->tick_time);
+	    string_format_time(minute_text, sizeof(minute_text), ":%M", tick_time);
 	    time_layer_set_text(&time_layer, hour_text, minute_text);
 		
 		// Start a counter upon an error and increase by 1 each minute
@@ -307,7 +303,7 @@ void handle_tick(AppContextRef ctx, PebbleTickEvent *t)
 		
 		// Request updated weather every 15 minutes
 		// Stop requesting after 3 hours without any successful connection
-		if(initial_request || !has_temperature || ((t->tick_time->tm_min % 15) == initial_minute && fail_count <= 180))
+		if(initial_request || !has_temperature || ((tick_time->tm_min % 15) == initial_minute && fail_count <= 180))
 		{
 			http_location_request();
 			initial_request = false;
@@ -329,7 +325,7 @@ void handle_tick(AppContextRef ctx, PebbleTickEvent *t)
 			
 			/****** The code snippet below is used for the "no vibration" version
 			// Ping the phone every 5 minutes
-			if (!(t->tick_time->tm_min % 5) && fail_count == 0)
+			if (!(tick_time->tm_min % 5) && fail_count == 0)
 			{
 				link_monitor_ping();
 			}
@@ -347,12 +343,12 @@ void handle_tick(AppContextRef ctx, PebbleTickEvent *t)
 
 
 // Initialize the application
-void handle_init(AppContextRef ctx)
+void handle_init()
 {
-    PblTm tm;
-    PebbleTickEvent t;
     ResHandle res_d;
     ResHandle res_h;
+    
+    tick_timer_service_subscribe(SECOND_UNIT, handle_tick);
 
     window_init(&window, "Futura");
     window_stack_push(&window, true /* Animated */);
@@ -386,21 +382,23 @@ void handle_init(AppContextRef ctx)
 	weather_layer_init(&weather_layer, GPoint(0, 90));
 	layer_add_child(&window.layer, &weather_layer.layer);
 	
-	http_register_callbacks((HTTPCallbacks){.failure=failed,.success=success,.reconnect=reconnect,.location=location}, (void*)ctx);
+	http_register_callbacks((HTTPCallbacks){.failure=failed,.success=success,.reconnect=reconnect,.location=location}, NULL);
 	
 	// Refresh time
-	get_time(&tm);
+	get_time(&tm);      // TODO: figure out if we can avoid completely, otherwise use `localtime(time(NULL))`
+    initial_minute = (tm.tm_min % 15);
+    /* TODO: test if this is still necessary
     t.tick_time = &tm;
     t.units_changed = SECOND_UNIT | MINUTE_UNIT | HOUR_UNIT | DAY_UNIT;
-	
-	initial_minute = (tm.tm_min % 15);
-	
-	handle_tick(ctx, &t);
+    handle_tick(ctx, &t);
+    */
 }
 
 // Shut down the application
-void handle_deinit(AppContextRef ctx)
+void handle_deinit()
 {
+    tick_timer_service_unsubscribe();
+    
     fonts_unload_custom_font(font_date);
     fonts_unload_custom_font(font_hour);
     fonts_unload_custom_font(font_minute);
@@ -411,17 +409,11 @@ void handle_deinit(AppContextRef ctx)
 
 /********************* Main Program *******************/
 
-void pbl_main(void *params)
+int main(void)
 {
+/* TODO: migrate these
     PebbleAppHandlers handlers =
     {
-       	.init_handler = &handle_init,
-       	.deinit_handler = &handle_deinit,
-       	.tick_info =
-        {
-      		.tick_handler = &handle_tick,
-       		.tick_units = SECOND_UNIT
-        },
 		.messaging_info = {
 			.buffer_sizes = {
 				.inbound = 124,
@@ -429,8 +421,10 @@ void pbl_main(void *params)
 		    }
 		}
     };
-	
-	app_event_loop(params, &handlers);
+*/
+    handle_init();
+	app_event_loop();
+    handle_deinit();
 }
 
 void request_weather() {
