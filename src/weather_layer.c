@@ -28,23 +28,20 @@ static uint8_t WEATHER_ICONS[] = {
 	RESOURCE_ID_ICON_LOADING3,
 };
 
-void weather_layer_create(WeatherLayer* weather_layer, GPoint pos) {
-	//layer_create(&weather_layer->layer, GRect(pos.x, pos.y, 144, 80));
+void weather_layer_init(WeatherLayer* weather_layer, GPoint pos) {
     weather_layer->layer = layer_create(GRect(pos.x, pos.y, 144, 80));
 	
 	// Add background layer
-	//text_layer_create(weather_layer->temp_layer_background, GRect(0, 10, 144, 68));
     weather_layer->temp_layer_background = text_layer_create(GRect(0, 10, 144, 68));
 	text_layer_set_background_color(weather_layer->temp_layer_background, GColorWhite);
-	layer_add_child(weather_layer->layer, weather_layer->temp_layer_background.layer);
+	layer_add_child(weather_layer->layer, (Layer *)weather_layer->temp_layer_background);
 	
     // Add temperature layer
-	//text_layer_create(weather_layer->temp_layer, GRect(70, 19, 72, 80));
     weather_layer->temp_layer = text_layer_create(GRect(70, 19, 72, 80));
 	text_layer_set_background_color(weather_layer->temp_layer, GColorClear);
 	text_layer_set_text_alignment(weather_layer->temp_layer, GTextAlignmentCenter);
 	text_layer_set_font(weather_layer->temp_layer, fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FUTURA_40)));
-	layer_add_child(weather_layer->layer, weather_layer->temp_layer.layer);
+	layer_add_child(weather_layer->layer, (Layer *)weather_layer->temp_layer);
 	
 	// Note absence of icon layer
 	weather_layer->has_weather_icon = false;
@@ -54,17 +51,15 @@ void weather_layer_set_icon(WeatherLayer* weather_layer, WeatherIcon icon) {
 	
 	// Remove any possible existing weather icon
 	if(weather_layer->has_weather_icon) {
-		layer_remove_from_parent(weather_layer->icon_layer.layer.layer);
+		layer_remove_from_parent((Layer *)weather_layer->icon_layer);
 		bitmap_layer_destroy(weather_layer->icon_layer);
 		weather_layer->has_weather_icon = false;
 	}
 	
 	// Add weather icon
-	//bitmap_layer_create(WEATHER_ICONS[icon], weather_layer->icon_layer);
-    bitmap_layer_create(weather_layer->icon_layer);
-    bitmap_layer_set_bitmap(weather_layer->icon_layer, WEATHER_ICONS[icon]);
-	layer_add_child(weather_layer->layer, weather_layer->icon_layer.layer.layer);
-	layer_set_frame(weather_layer->icon_layer.layer.layer, GRect(9, 13, 60, 60));
+    weather_layer->icon_layer= bitmap_layer_create(GRect(9, 13, 60, 60));
+    bitmap_layer_set_bitmap(weather_layer->icon_layer, gbitmap_create_with_resource(WEATHER_ICONS[icon]));
+	layer_add_child(weather_layer->layer, (Layer *)weather_layer->icon_layer);
 	weather_layer->has_weather_icon = true;
 }
 
@@ -79,10 +74,10 @@ void weather_layer_set_temperature(WeatherLayer* weather_layer, int16_t t, bool 
 	  text_layer_set_text_alignment(weather_layer->temp_layer, GTextAlignmentCenter);
 	  // Add degree symbol. If temperature is stale, add blank space instead.
 	  if (!is_stale) {
-	    memcpy(weather_layer->temp_str[degree_pos], "°", 3);
+	    memcpy(&weather_layer->temp_str[degree_pos], "°", 3);       // TODO: shouldn't this copy only 2 bytes?
 	  }
 	  else {
-		memcpy(weather_layer->temp_str[degree_pos], " ", 3);
+		memcpy(&weather_layer->temp_str[degree_pos], " ", 3);
 	  }
 		
 	  // Is the temperature below zero?
@@ -92,7 +87,7 @@ void weather_layer_set_temperature(WeatherLayer* weather_layer, int16_t t, bool 
           weather_layer->temp_str + 1,
           5 - (1 + 1)
         );
-		memcpy(weather_layer->temp_str[1], " ", 1);
+		memcpy(&weather_layer->temp_str[1], " ", 1);
 	  }
 	} 
 	
@@ -103,11 +98,11 @@ void weather_layer_set_temperature(WeatherLayer* weather_layer, int16_t t, bool 
 	  text_layer_set_text_alignment(weather_layer->temp_layer, GTextAlignmentLeft);
 	  // Add degree symbol. If temperature is stale, add blank space instead.
 	  if (!is_stale) {
-	  	memcpy(weather_layer->temp_str[degree_pos], "°", 3);
+	  	memcpy(&weather_layer->temp_str[degree_pos], "°", 3);
 	  }
 	  else {
 		text_layer_set_text_alignment(weather_layer->temp_layer, GTextAlignmentCenter);
-		memcpy(weather_layer->temp_str[degree_pos], " ", 3);
+		memcpy(&weather_layer->temp_str[degree_pos], " ", 3);
 	  }
 	} 
 	
@@ -118,10 +113,10 @@ void weather_layer_set_temperature(WeatherLayer* weather_layer, int16_t t, bool 
 	  text_layer_set_text_alignment(weather_layer->temp_layer, GTextAlignmentCenter);
 	  // Add degree symbol. If temperature is stale, add blank space instead.
 	  if (!is_stale) {
-	    memcpy(weather_layer->temp_str[degree_pos], "°", 3);
+	    memcpy(&weather_layer->temp_str[degree_pos], "°", 3);
 	  }
 	  else {
-		memcpy(weather_layer->temp_str[degree_pos], " ", 3);
+		memcpy(&weather_layer->temp_str[degree_pos], " ", 3);
 	  }
 		
 	  // Is the temperature below zero?
@@ -131,14 +126,14 @@ void weather_layer_set_temperature(WeatherLayer* weather_layer, int16_t t, bool 
           weather_layer->temp_str + 1,
           5 - (1 + 1)
         );
-		memcpy(weather_layer->temp_str[1], " ", 1);
+		memcpy(&weather_layer->temp_str[1], " ", 1);
 	  }
 	}
 	
 	text_layer_set_text(weather_layer->temp_layer, weather_layer->temp_str);
 }
 
-void weather_layer_destroy(WeatherLayer* weather_layer) {
+void weather_layer_deinit(WeatherLayer* weather_layer) {
 	if(weather_layer->has_weather_icon)
 		bitmap_layer_destroy(weather_layer->icon_layer);
 }

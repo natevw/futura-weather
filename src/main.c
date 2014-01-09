@@ -1,4 +1,5 @@
 #include <pebble.h>
+#include <time.h>
 
 #include "http.h"
 #include "util.h"
@@ -8,7 +9,7 @@
 #include "config.h"
 
 #define TIME_FRAME      (GRect(0, 2, 144, 168-6))
-//#define DATE_FRAME      (GRect(1, 66, 144, 168-62)) //is defined in "static void init(void)" instead
+#define DATE_FRAME      (GRect(1, 66, 144, 168-62)) //is defined in "static void init(void)" instead
 
 // POST variables
 #define WEATHER_KEY_LATITUDE 1
@@ -285,12 +286,11 @@ void handle_init()
     struct tm* tick_time;
     ResHandle res_d;
     ResHandle res_h;
-
-    window_init(&window, "Futura");
-    window_stack_push(&window, true /* Animated */);
-    window_set_background_color(&window, GColorBlack);
-
-    resource_init_current_app(&APP_RESOURCES);
+    
+    window = window_create();
+    
+    window_stack_push(window, true /* Animated */);
+    window_set_background_color(window, GColorBlack);
 
     res_d = resource_get_handle(RESOURCE_ID_FUTURA_18); // Date font
     res_h = resource_get_handle(RESOURCE_ID_FUTURA_CONDENSED_53); // Time font
@@ -299,42 +299,43 @@ void handle_init()
     font_hour = fonts_load_custom_font(res_h);
     font_minute = fonts_load_custom_font(res_h);
 
-    time_layer_init(&time_layer, window.layer.frame);
+    time_layer_init(&time_layer, layer_get_frame(window_get_root_layer(window)));
     time_layer_set_text_color(&time_layer, GColorWhite);
     time_layer_set_background_color(&time_layer, GColorClear);
     time_layer_set_fonts(&time_layer, font_hour, font_minute);
-    layer_set_frame(&time_layer.layer, TIME_FRAME);
-    layer_add_child(&window.layer, &time_layer.layer);
+    layer_set_frame(time_layer.layer, TIME_FRAME);
+    layer_add_child(window_get_root_layer(window), time_layer.layer);
 
-    text_layer_init(&date_layer, window.layer.frame);
+    date_layer = text_layer_create(layer_get_frame(window_get_root_layer(window)));
     text_layer_set_text_color(date_layer, GColorWhite);
-    text_layer_set_background_color(&date_layer, GColorClear);
-    text_layer_set_font(&date_layer, font_date);
-    text_layer_set_text_alignment(&date_layer, GTextAlignmentCenter);
-    layer_set_frame(&date_layer.layer, DATE_FRAME);
-    layer_add_child(&window.layer, &date_layer.layer);
+    text_layer_set_background_color(date_layer, GColorClear);
+    text_layer_set_font(date_layer, font_date);
+    text_layer_set_text_alignment(date_layer, GTextAlignmentCenter);
+    layer_set_frame((Layer *)date_layer, DATE_FRAME);
+    layer_add_child(window_get_root_layer(window), (Layer *)date_layer);
 
 	// Add weather layer
 	weather_layer_init(&weather_layer, GPoint(0, 90));
-	layer_add_child(&window.layer, &weather_layer.layer);
+	layer_add_child(window_get_root_layer(window), weather_layer.layer);
 	
 	http_register_callbacks((HTTPCallbacks){.failure=failed,.success=success,.reconnect=reconnect,.location=location}, NULL);
 	
 	// Refresh time
-    tick_time = localtime(time(NULL))
+    time_t rawtime = time(NULL);
+    tick_time = localtime(&rawtime);
 	initial_minute = (tick_time->tm_min % 15);
 	
 	handle_tick(tick_time, SECOND_UNIT | MINUTE_UNIT | HOUR_UNIT | DAY_UNIT);
 }
 
 // Shut down the application
-void handle_deinit(AppContextRef ctx)
+void handle_deinit()
 {
     fonts_unload_custom_font(font_date);
     fonts_unload_custom_font(font_hour);
     fonts_unload_custom_font(font_minute);
 	
-	weather_layer_deinit(&weather_layer);
+	
 }
 
     /*PebbleAppHandlers handlers =
@@ -381,30 +382,31 @@ static void init(void) {
     font_hour = fonts_load_custom_font(res_h);
     font_minute = fonts_load_custom_font(res_h);
 
-	time_layer_init(&time_layer, window.layer.frame);
+	time_layer_init(&time_layer, layer_get_frame(window_get_root_layer(window)));
     time_layer_set_text_color(&time_layer, GColorWhite);
     time_layer_set_background_color(&time_layer, GColorClear);
     time_layer_set_fonts(&time_layer, font_hour, font_minute);
-    layer_set_frame(&time_layer.layer, TIME_FRAME);
-    layer_add_child(&window.layer, &time_layer.layer);
+    layer_set_frame(time_layer.layer, TIME_FRAME);
+    layer_add_child(window_get_root_layer(window), time_layer.layer);
 
-	date_layer = text_layer_create(GRect(1, 66, 144, 168-62));
+	date_layer = text_layer_create(DATE_FRAME);
 	//text_layer_init(&date_layer, window.layer.frame);
     text_layer_set_text_color(date_layer, GColorWhite);
     text_layer_set_background_color(date_layer, GColorClear);
     text_layer_set_font(date_layer, font_date);
     text_layer_set_text_alignment(date_layer, GTextAlignmentCenter);
     //layer_set_frame(date_layer.layer, DATE_FRAME);
-    layer_add_child(window.layer, date_layer.layer);
+    layer_add_child(window_get_root_layer(window), (Layer *)date_layer);
 
 	// Add weather layer
 	weather_layer_init(&weather_layer, GPoint(0, 90));
-	layer_add_child(&window.layer, &weather_layer.layer);
+	layer_add_child(window_get_root_layer(window), weather_layer.layer);
 
-	tick_timer_service_subscribe(SECOND_UNIT, handle_second_tick);
+	tick_timer_service_subscribe(SECOND_UNIT, handle_tick);
 }
 
 static void deinit(void) {
+    weather_layer_deinit(&weather_layer);
 	window_destroy(window);
 	tick_timer_service_unsubscribe();
 }
