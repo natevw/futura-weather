@@ -1,4 +1,4 @@
-#include "pebble_os.h"
+#include <pebble.h>
 #include "http.h"
 
 #define HTTP_URL_KEY 0xFFFF
@@ -33,7 +33,7 @@ static void app_received(DictionaryIterator* received, void* context);
 static void app_dropped(void* context, AppMessageResult reason);
 
 HTTPResult http_out_get(const char* url, int32_t cookie, DictionaryIterator **iter_out) {
-	AppMessageResult app_result = app_message_out_get(iter_out);
+	AppMessageResult app_result = app_message_outbox_begin(iter_out);
 	if(app_result != APP_MSG_OK) {
 		return app_result;
 	}
@@ -54,8 +54,7 @@ HTTPResult http_out_get(const char* url, int32_t cookie, DictionaryIterator **it
 
 
 HTTPResult http_out_send() {
-	AppMessageResult result = app_message_out_send();
-	app_message_out_release(); // We don't care if it's already released.
+	AppMessageResult result = app_message_outbox_send();
 	return result;
 }
 
@@ -265,7 +264,7 @@ static void app_dropped(void* context, AppMessageResult reason) {
 // Time stuff
 HTTPResult http_time_request() {
 	DictionaryIterator *iter;
-	AppMessageResult app_result = app_message_out_get(&iter);
+	AppMessageResult app_result = app_message_outbox_begin(&iter);
 	if(app_result != APP_MSG_OK) {
 		return app_result;
 	}
@@ -273,15 +272,14 @@ HTTPResult http_time_request() {
 	if(dict_result != DICT_OK) {
 		return dict_result << 12;
 	}
-	app_result = app_message_out_send();
-	app_message_out_release();
+	app_result = app_message_outbox_send();
 	return app_result;
 }
 
 // Location stuff
 HTTPResult http_location_request() {
 	DictionaryIterator *iter;
-	AppMessageResult app_result = app_message_out_get(&iter);
+	AppMessageResult app_result = app_message_outbox_begin(&iter);
 	if(app_result != APP_MSG_OK) {
 		return app_result;
 	}
@@ -289,8 +287,7 @@ HTTPResult http_location_request() {
 	if(dict_result != DICT_OK) {
 		return dict_result << 12;
 	}
-	app_result = app_message_out_send();
-	app_message_out_release();
+	app_result = app_message_outbox_send();
 	return app_result;
 }
 
@@ -300,7 +297,7 @@ void http_set_app_id(int32_t new_app_id) {
 }
 
 HTTPResult http_cookie_set_start(int32_t request_id, DictionaryIterator **iter_out) {
-	AppMessageResult app_result = app_message_out_get(iter_out);
+	AppMessageResult app_result = app_message_outbox_begin(iter_out);
 	if(app_result != APP_MSG_OK) {
 		return app_result;
 	}
@@ -316,76 +313,67 @@ HTTPResult http_cookie_set_start(int32_t request_id, DictionaryIterator **iter_o
 }
 
 HTTPResult http_cookie_set_end() {
-	AppMessageResult result = app_message_out_send();
-	app_message_out_release(); // We don't care if it's already released.
+	AppMessageResult result = app_message_outbox_send();
 	return result;
 }
 
 HTTPResult http_cookie_get_multiple(int32_t request_id, uint32_t* keys, int32_t length) {
 	// Basic setup
 	DictionaryIterator *iter;
-	AppMessageResult app_result = app_message_out_get(&iter);
+	AppMessageResult app_result = app_message_outbox_begin(&iter);
 	if(app_result != APP_MSG_OK) {
 		return app_result;
 	}
 	DictionaryResult dict_result = dict_write_int32(iter, HTTP_COOKIE_LOAD_KEY, request_id);
 	if(dict_result != DICT_OK) {
-		app_message_out_release();
 		return dict_result << 12;
 	}
 	dict_result = dict_write_int32(iter, HTTP_APP_ID_KEY, our_app_id);
 	if(dict_result != DICT_OK) {
-		app_message_out_release();
 		return dict_result << 12;
 	}
 	// Add the keys
 	for(int i = 0; i < length; ++i) {
 		dict_result = dict_write_uint8(iter, keys[i], 1);
 		if(dict_result != DICT_OK) {
-			app_message_out_release();
 			return dict_result << 12;
 		}
 	}
 	// Send it.
-	app_result = app_message_out_send();
-	app_message_out_release();
+	app_result = app_message_outbox_send();
 	return app_result;
 }
 
 HTTPResult http_cookie_delete_multiple(int32_t request_id, uint32_t* keys, int32_t length) {
 	// Basic setup
 	DictionaryIterator *iter;
-	AppMessageResult app_result = app_message_out_get(&iter);
+	AppMessageResult app_result = app_message_outbox_begin(&iter);
 	if(app_result != APP_MSG_OK) {
 		return app_result;
 	}
 	DictionaryResult dict_result = dict_write_int32(iter, HTTP_COOKIE_DELETE_KEY, request_id);
 	if(dict_result != DICT_OK) {
-		app_message_out_release();
 		return dict_result << 12;
 	}
 	dict_result = dict_write_int32(iter, HTTP_APP_ID_KEY, our_app_id);
 	if(dict_result != DICT_OK) {
-		app_message_out_release();
 		return dict_result << 12;
 	}
 	// Add the keys
 	for(int i = 0; i < length; ++i) {
 		dict_result = dict_write_uint8(iter, keys[i], 1);
 		if(dict_result != DICT_OK) {
-			app_message_out_release();
 			return dict_result << 12;
 		}
 	}
 	// Send it.
-	app_result = app_message_out_send();
-	app_message_out_release();
+	app_result = app_message_outbox_send();
 	return app_result;
 }
 
 HTTPResult http_cookie_fsync() {
 	DictionaryIterator *iter;
-	AppMessageResult app_result = app_message_out_get(&iter);
+	AppMessageResult app_result = app_message_outbox_begin(&iter);
 	if(app_result != APP_MSG_OK) {
 		return app_result;
 	}
@@ -393,8 +381,7 @@ HTTPResult http_cookie_fsync() {
 	if(dict_result != DICT_OK) {
 		return dict_result << 12;
 	}
-	app_result = app_message_out_send();
-	app_message_out_release();
+	app_result = app_message_outbox_send();
 	return app_result;
 }
 
@@ -406,7 +393,6 @@ HTTPResult http_cookie_set_int(uint32_t request_id, uint32_t key, const void* in
 	}
 	DictionaryResult dict_result = dict_write_int(iter, key, integer, width_bytes, is_signed);
 	if(dict_result != DICT_OK) {
-		app_message_out_release();
 		return dict_result << 12;
 	}
 	return http_cookie_set_end();
@@ -420,7 +406,6 @@ HTTPResult http_cookie_set_cstring(uint32_t request_id, uint32_t key, const char
 	}
 	DictionaryResult dict_result = dict_write_cstring(iter, key, value);
 	if(dict_result != DICT_OK) {
-		app_message_out_release();
 		return dict_result << 12;
 	}
 	return http_cookie_set_end();
@@ -434,7 +419,6 @@ HTTPResult http_cookie_set_data(uint32_t request_id, uint32_t key, const uint8_t
 	}
 	DictionaryResult dict_result = dict_write_data(iter, key, value, length);
 	if(dict_result != DICT_OK) {
-		app_message_out_release();
 		return dict_result << 12;
 	}
 	return http_cookie_set_end();

@@ -1,3 +1,2 @@
-
-# Ignore build generated files
-build
+.DS_Store
+build/

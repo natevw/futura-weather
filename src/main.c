@@ -7,16 +7,8 @@
 #include "link_monitor.h"
 #include "config.h"
 
-#define MY_UUID { 0x91, 0x41, 0xB6, 0x28, 0xBC, 0x89, 0x49, 0x8E, 0xB1, 0x47, 0x04, 0x9F, 0x49, 0xC0, 0x99, 0xAD }
-
-PBL_APP_INFO(MY_UUID,
-             "Futura Weather", "Niknam Moslehi", // Modification of "Roboto Weather" by Martin Rosinski
-             2, 0, // App version
-             RESOURCE_ID_IMAGE_MENU_ICON,
-             APP_INFO_WATCH_FACE);
-
 #define TIME_FRAME      (GRect(0, 2, 144, 168-6))
-#define DATE_FRAME      (GRect(1, 66, 144, 168-62))
+//#define DATE_FRAME      (GRect(1, 66, 144, 168-62)) //is defined in "static void init(void)" instead
 
 // POST variables
 #define WEATHER_KEY_LATITUDE 1
@@ -30,8 +22,8 @@ PBL_APP_INFO(MY_UUID,
 #define WEATHER_HTTP_COOKIE 1949327671
 #define TIME_HTTP_COOKIE 1131038282
 
-Window window;          // Main window
-TextLayer date_layer;   // Layer for the date
+static Window *window;          // Main window
+static TextLayer *date_layer;   // Layer for the date
 TimeLayer time_layer;   // Layer for the time
 WeatherLayer weather_layer; // Layer for the weather information
 
@@ -124,7 +116,7 @@ void failed(int32_t cookie, int http_status, void* context) {
 	
 	// Remove temperature text 30 minutes after a phone/bridge app disconnection
 	if (fail_count >= 30 && phone_disconnected) {
-		text_layer_set_text(&weather_layer.temp_layer, " ");
+		text_layer_set_text(weather_layer.temp_layer, " ");
 		has_temperature = false;
 	}
 	
@@ -143,13 +135,8 @@ void success(int32_t cookie, int http_status, DictionaryIterator* received, void
 	Tuple* icon_tuple = dict_find(received, WEATHER_KEY_ICON);
 	if(icon_tuple) {
 		int icon = icon_tuple->value->int8;
-		if(icon >= 0 && icon < 18) {
-			if (!has_temperature && icon == 17) {
-				weather_layer_set_icon(&weather_layer, icon);
-			}
-			else if (icon != 17) {
-				weather_layer_set_icon(&weather_layer, icon);
-			}
+		if(icon >= 0 && icon < 18 && icon != 17) {
+			weather_layer_set_icon(&weather_layer, icon);
 		}
 	}
 	Tuple* temperature_tuple = dict_find(received, WEATHER_KEY_TEMPERATURE);
@@ -179,7 +166,7 @@ void reconnect(void* context) {
 
 void request_weather();
 
-void handle_tick(struct tm* tick_time, TimeUnits units_changed)
+static void handle_tick(struct tm *tick_time, TimeUnits units_changed)
 {
     // 'Animate' loading icon until the first successful weather request
 	if (!has_temperature && !has_failed)
@@ -207,10 +194,7 @@ void handle_tick(struct tm* tick_time, TimeUnits units_changed)
 		
 		if (units_changed & DAY_UNIT)
 	    {		
-		    string_format_time(date_text,
-	                           sizeof(date_text),
-	                           "%a %d",
-	                           tick_time);
+		    strftime(date_text, sizeof(date_text), "%a %d", tick_time);
 
 			// Triggered if day of month < 10
 			if (date_text[4] == '0')
@@ -219,58 +203,12 @@ void handle_tick(struct tm* tick_time, TimeUnits units_changed)
 	            memmove(&date_text[4], &date_text[5], sizeof(date_text) - 1);
 			}
 			
-			/*** LOCALIZATION CODE BEGIN ***
-			
-			// Primitive hack to translate the day of week to another language
-			// Needs to be exactly 3 characters, e.g. "Mon" or "Mo "
-			// Supported characters: A-Z, a-z, 0-9
-			
-			if (date_text[0] == 'M')
-			{
-				memcpy(&date_text, "XXX", 3); // Monday
-			}
-			
-			if (date_text[0] == 'T' && date_text[1] == 'u')
-			{
-				memcpy(&date_text, "XXX", 3); // Tuesday
-			}
-			
-			if (date_text[0] == 'W')
-			{
-				memcpy(&date_text, "XXX", 3); // Wednesday
-			}
-			
-			if (date_text[0] == 'T' && date_text[1] == 'h')
-			{
-				memcpy(&date_text, "XXX", 3); // Thursday
-			}
-			
-			if (date_text[0] == 'F')
-			{
-				memcpy(&date_text, "XXX", 3); // Friday
-			}
-			
-			if (date_text[0] == 'S' && date_text[1] == 'a')
-			{
-				memcpy(&date_text, "XXX", 3); // Saturday
-			}
-			
-			if (date_text[0] == 'S' && date_text[1] == 'u')
-			{
-				memcpy(&date_text, "XXX", 3); // Sunday
-			}
-			
-			// Uncomment the line below if your labels consist of 2 characters and 1 space, e.g. "Mo "
-			//memmove(&date_text[3], &date_text[4], sizeof(date_text) - 1);
-			
-			*** LOCALIZATION CODE END ***/
-			
-	        text_layer_set_text(&date_layer, date_text);
+	        text_layer_set_text(date_layer, date_text);
 	    }
 
 	    if (clock_is_24h_style())
 	    {
-	        string_format_time(hour_text, sizeof(hour_text), "%H", tick_time);
+	        strftime(hour_text, sizeof(hour_text), "%H", tick_time);
 			if (hour_text[0] == '0')
 	        {
 	            // Hack to get rid of the leading zero of the hour
@@ -279,7 +217,7 @@ void handle_tick(struct tm* tick_time, TimeUnits units_changed)
 	    }
 	    else
 	    {
-	        string_format_time(hour_text, sizeof(hour_text), "%I", tick_time);
+	        strftime(hour_text, sizeof(hour_text), "%I", tick_time);
 	        if (hour_text[0] == '0')
 	        {
 	            // Hack to get rid of the leading zero of the hour
@@ -287,7 +225,7 @@ void handle_tick(struct tm* tick_time, TimeUnits units_changed)
 	        }
 	    }
 
-	    string_format_time(minute_text, sizeof(minute_text), ":%M", tick_time);
+	    strftime(minute_text, sizeof(minute_text), ":%M", tick_time);
 	    time_layer_set_text(&time_layer, hour_text, minute_text);
 		
 		// Start a counter upon an error and increase by 1 each minute
@@ -341,14 +279,12 @@ void handle_tick(struct tm* tick_time, TimeUnits units_changed)
 	}
 }
 
-
 // Initialize the application
 void handle_init()
 {
+    struct tm* tick_time;
     ResHandle res_d;
     ResHandle res_h;
-    
-    tick_timer_service_subscribe(SECOND_UNIT, handle_tick);
 
     window_init(&window, "Futura");
     window_stack_push(&window, true /* Animated */);
@@ -371,7 +307,7 @@ void handle_init()
     layer_add_child(&window.layer, &time_layer.layer);
 
     text_layer_init(&date_layer, window.layer.frame);
-    text_layer_set_text_color(&date_layer, GColorWhite);
+    text_layer_set_text_color(date_layer, GColorWhite);
     text_layer_set_background_color(&date_layer, GColorClear);
     text_layer_set_font(&date_layer, font_date);
     text_layer_set_text_alignment(&date_layer, GTextAlignmentCenter);
@@ -385,20 +321,15 @@ void handle_init()
 	http_register_callbacks((HTTPCallbacks){.failure=failed,.success=success,.reconnect=reconnect,.location=location}, NULL);
 	
 	// Refresh time
-	get_time(&tm);      // TODO: figure out if we can avoid completely, otherwise use `localtime(time(NULL))`
-    initial_minute = (tm.tm_min % 15);
-    /* TODO: test if this is still necessary
-    t.tick_time = &tm;
-    t.units_changed = SECOND_UNIT | MINUTE_UNIT | HOUR_UNIT | DAY_UNIT;
-    handle_tick(ctx, &t);
-    */
+    tick_time = localtime(time(NULL))
+	initial_minute = (tick_time->tm_min % 15);
+	
+	handle_tick(tick_time, SECOND_UNIT | MINUTE_UNIT | HOUR_UNIT | DAY_UNIT);
 }
 
 // Shut down the application
-void handle_deinit()
+void handle_deinit(AppContextRef ctx)
 {
-    tick_timer_service_unsubscribe();
-    
     fonts_unload_custom_font(font_date);
     fonts_unload_custom_font(font_hour);
     fonts_unload_custom_font(font_minute);
@@ -406,14 +337,15 @@ void handle_deinit()
 	weather_layer_deinit(&weather_layer);
 }
 
-
-/********************* Main Program *******************/
-
-int main(void)
-{
-/* TODO: migrate these
-    PebbleAppHandlers handlers =
+    /*PebbleAppHandlers handlers =
     {
+       	.init_handler = &handle_init,
+       	.deinit_handler = &handle_deinit,
+       	.tick_info =
+        {
+      		.tick_handler = &handle_tick,
+       		.tick_units = SECOND_UNIT
+        },
 		.messaging_info = {
 			.buffer_sizes = {
 				.inbound = 124,
@@ -421,10 +353,66 @@ int main(void)
 		    }
 		}
     };
-*/
-    handle_init();
+	
+	app_event_loop(params, &handlers);*/
+
+static void init(void) {
+	window = window_create();
+	window_stack_push(window, true /* Animated */);
+	window_set_background_color(window, GColorBlack);
+	
+	//window_set_fullscreen(window, true);
+	/*window_set_window_handlers(window, (WindowHandlers) {
+    	.load = window_load,
+    	.unload = window_unload
+	});*/
+
+	const int inbound_size = 124;
+	const int outbound_size = 256;
+	app_message_open(inbound_size, outbound_size);
+	
+	ResHandle res_d;
+    ResHandle res_h;
+
+	res_d = resource_get_handle(RESOURCE_ID_FUTURA_18); // Date font
+    res_h = resource_get_handle(RESOURCE_ID_FUTURA_CONDENSED_53); // Time font
+
+    font_date = fonts_load_custom_font(res_d);
+    font_hour = fonts_load_custom_font(res_h);
+    font_minute = fonts_load_custom_font(res_h);
+
+	time_layer_init(&time_layer, window.layer.frame);
+    time_layer_set_text_color(&time_layer, GColorWhite);
+    time_layer_set_background_color(&time_layer, GColorClear);
+    time_layer_set_fonts(&time_layer, font_hour, font_minute);
+    layer_set_frame(&time_layer.layer, TIME_FRAME);
+    layer_add_child(&window.layer, &time_layer.layer);
+
+	date_layer = text_layer_create(GRect(1, 66, 144, 168-62));
+	//text_layer_init(&date_layer, window.layer.frame);
+    text_layer_set_text_color(date_layer, GColorWhite);
+    text_layer_set_background_color(date_layer, GColorClear);
+    text_layer_set_font(date_layer, font_date);
+    text_layer_set_text_alignment(date_layer, GTextAlignmentCenter);
+    //layer_set_frame(date_layer.layer, DATE_FRAME);
+    layer_add_child(window.layer, date_layer.layer);
+
+	// Add weather layer
+	weather_layer_init(&weather_layer, GPoint(0, 90));
+	layer_add_child(&window.layer, &weather_layer.layer);
+
+	tick_timer_service_subscribe(SECOND_UNIT, handle_second_tick);
+}
+
+static void deinit(void) {
+	window_destroy(window);
+	tick_timer_service_unsubscribe();
+}
+
+int main(void) {
+	init();
 	app_event_loop();
-    handle_deinit();
+	deinit();
 }
 
 void request_weather() {

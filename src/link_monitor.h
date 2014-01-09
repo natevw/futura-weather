@@ -1,7 +1,7 @@
 //Monitors the connection to the phone
 //Can alert the user if it's broken
 
-#include "pebble_os.h"
+#include <pebble.h>
 #include "http.h"
 #include "util.h"
 
